@@ -1,4 +1,4 @@
-package lexer
+package tokenizer
 
 import (
 	"fmt"

@@ -53,6 +53,7 @@ func OperatorToken(runes []rune, start int) (int, func(int) []Token) {
 	case []rune("≢")[0]:
 	case []rune("≠")[0]:
 	case []rune("•")[0]:
+	case []rune("∂")[0]:
 		break
 	default:
 		return -1, func(action int) []Token {
@@ -196,19 +197,26 @@ func SubexpressionToken(runes []rune, start int) (int, func(int) []Token) {
 				continue
 			}
 			i++
+			var t Token
+			var T []Token
+			generators := TokenizeString(string(runes[1 : i-1]))
+			for j := 0; j < len(generators); j++ {
+				k := generators[j](GetToken)
+				T = append(T, k[0])
+				if T[0]._type == Empty {
+					return 0, func(action int) []Token {
+						var t Token
+						t._type = Empty
+						return []Token{t}
+					}
+				}
+			}
 			return i, func(action int) []Token {
-				var t Token
-				var T []Token
 				if action == GetToken {
 					t._type = Subexpression
 					t.Subexpression = string(runes[1 : i-1])
 					return []Token{t}
 				} else {
-					generators := TokenizeString(string(runes[1 : i-1]))
-					for j := 0; j < len(generators); j++ {
-						k := generators[j](GetToken)
-						T = append(T, k[0])
-					}
 					return T
 				}
 			}
@@ -227,7 +235,7 @@ func SubexpressionToken(runes []rune, start int) (int, func(int) []Token) {
 func TokenizeString(expression string) []func(int) []Token {
 	runes := []rune(expression)
 	generators := [](func(int) []Token){}
-	tokenizers := []func([]rune, int) (int, func(int) []Token){OperatorToken, SymbolicToken, NumericToken, SubexpressionToken}
+	tokenizers := []func([]rune, int) (int, func(int) []Token){OperatorToken, NumericToken, SymbolicToken, SubexpressionToken}
 	var end int
 	var token_func func(int) []Token
 	var i int

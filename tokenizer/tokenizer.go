@@ -5,50 +5,69 @@ import (
 	"unicode"
 )
 
+const (
+	Operator      = iota
+	Symbol        = iota
+	RealNumeric   = iota
+	ImagNumeric   = iota
+	Subexpression = iota
+	Empty         = -1
+)
+
+const (
+	GetToken     = iota
+	GetSubtokens = iota
+)
+
 type Token struct {
-	_type    int
-	Symbolic string
-	Numeric  float64
-	Operator rune
+	_type         int
+	Symbolic      string
+	Numeric       float64
+	Operator      rune
+	Subexpression string
 }
 
-func OperatorToken(token_str string, start int) (int, func() Token) {
+func OperatorToken(runes []rune, start int) (int, func(int) []Token) {
 	var operator rune
-	operator = rune(token_str[start])
+	operator = runes[start]
 	switch operator {
 	case '+':
 	case '*':
 	case '/':
 	case '^':
 	case '=':
-	case rune("≤"[0]):
+	case []rune("≤")[0]:
 	case '<':
 	case '>':
-	case rune("≥"[0]):
+	case []rune("≥")[0]:
 		break
 	default:
-		return -1, func() Token {
+		return -1, func(action int) []Token {
 			var t Token
-			t._type = -1
-			return t
+			t._type = Empty
+			return []Token{t}
 		}
 	}
-	return start + 1, func() Token {
+	return 1, func(action int) []Token {
 		var t Token
-		t._type = 0
-		t.Operator = operator
-		return t
+		if action == GetToken {
+			t._type = Operator
+			t.Operator = operator
+		} else {
+			t._type = Empty
+		}
+		return []Token{t}
 	}
 }
 
-func SymbolicToken(token_str string, start int) (int, func() Token) {
-	runes := []rune(token_str)[start:]
+func SymbolicToken(runes []rune, start int) (int, func(int) []Token) {
+	runes = runes[start:]
 	i := 0
 	if unicode.IsLetter((runes[i])) == false {
-		return 0, func() Token {
+		return 0, func(action int) []Token {
 			var t Token
-			t._type = -1
-			return t
+			t._type = Empty
+			return []Token{t}
 		}
 	}
 	for i = 1; i < len(runes); i++ {
@@ -58,35 +77,36 @@ func SymbolicToken(token_str string, start int) (int, func() Token) {
 		if unicode.IsNumber(runes[i]) == true {
 			continue
 		}
-		if unicode.IsSymbol(runes[i]) == true {
-			continue
-		}
 		if runes[i] == '_' {
 			continue
 		}
 		break
 	}
-	symbol := string(runes[start : start+i])
-	return start + i, func() Token {
+	symbol := string(runes[:i])
+	return i, func(action int) []Token {
 		var t Token
-		t._type = 1
-		t.Symbolic = symbol
-		return t
+		if action == GetToken {
+			t._type = Symbol
+			t.Symbolic = symbol
+		} else {
+			t._type = Empty
+		}
+		return []Token{t}
 	}
 }
 
-func NumericToken(token_str string, start int) (int, func() Token) {
-	runes := []rune(token_str)[start:]
+func NumericToken(runes []rune, start int) (int, func(int) []Token) {
+	runes = runes[start:]
 	i := 0
 	scientific := false
 	decimal := false
 	isComplex := false
 	if unicode.IsNumber((runes[i])) == false &&
 		runes[i] != '-' {
-		return 0, func() Token {
+		return 0, func(action int) []Token {
 			var t Token
-			t._type = -1
-			return t
+			t._type = Empty
+			return []Token{t}
 		}
 	}
 	for i = 1; i < len(runes); i++ {
@@ -111,21 +131,110 @@ func NumericToken(token_str string, start int) (int, func() Token) {
 		break
 	}
 	var numeric float64
-	fmt.Sscanf(string(token_str[start:i]), "%f", &numeric)
+	fmt.Sscanf(string(runes[:i]), "%f", &numeric)
 	if isComplex == false {
-		return start + i, func() Token {
+		return i, func(action int) []Token {
 			var t Token
-			t._type = 2
-			t.Numeric = numeric
-			return t
+			if action == GetToken {
+				t._type = RealNumeric
+				t.Numeric = numeric
+			} else {
+				t._type = Empty
+			}
+			return []Token{t}
 		}
 	} else {
-		return start + i, func() Token {
+		return i + 1, func(action int) []Token {
 			var t Token
-			t._type = 3
-			t.Numeric = numeric
-			return t
+			if action == GetToken {
+				t._type = ImagNumeric
+				t.Numeric = numeric
+			} else {
+				t._type = Empty
+			}
+			return []Token{t}
 		}
 	}
+}
 
+func SubexpressionToken(runes []rune, start int) (int, func(int) []Token) {
+	runes = runes[start:]
+	i := 0
+	var openingBracket rune
+	var closingBracket rune
+	level := 0
+	if runes[i] != '(' && runes[i] != '[' {
+		return 0, func(action int) []Token {
+			var t Token
+			t._type = Empty
+			return []Token{t}
+		}
+	}
+	openingBracket = runes[i]
+	if runes[i] == '(' {
+		closingBracket = ')'
+	} else {
+		closingBracket = ']'
+	}
+	for i = 1; i < len(runes); i++ {
+		if runes[i] == closingBracket {
+			if level > 0 {
+				level--
+				continue
+			}
+			i++
+			return i, func(action int) []Token {
+				var t Token
+				var T []Token
+				if action == GetToken {
+					t._type = Subexpression
+					t.Subexpression = string(runes[1 : i-1])
+					return []Token{t}
+				} else {
+					generators := TokenizeString(string(runes[1 : i-1]))
+					for j := 0; j < len(generators); j++ {
+						k := generators[j](GetToken)
+						T = append(T, k[0])
+					}
+					return T
+				}
+			}
+		}
+		if runes[i] == openingBracket {
+			level++
+		}
+	}
+	return 0, func(action int) []Token {
+		var t Token
+		t._type = Empty
+		return []Token{t}
+	}
+}
+
+func TokenizeString(expression string) []func(int) []Token {
+	runes := []rune(expression)
+	generators := [](func(int) []Token){}
+	tokenizers := []func([]rune, int) (int, func(int) []Token){OperatorToken, SymbolicToken, NumericToken, SubexpressionToken}
+	var end int
+	var token_func func(int) []Token
+	var i int
+	for i = 0; i < len(runes); {
+		if unicode.IsSpace(runes[i]) == true {
+			i++
+			continue
+		}
+		for j := 0; j < len(tokenizers); j++ {
+			end, token_func = tokenizers[j](runes, i)
+			if end > 0 {
+				i += end
+				generators = append(generators, token_func)
+				break
+			}
+		}
+		if end == 0 {
+			return []func(int) []Token{}
+		}
+
+	}
+	return generators
 }

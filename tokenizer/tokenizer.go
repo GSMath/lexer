@@ -31,15 +31,28 @@ func OperatorToken(runes []rune, start int) (int, func(int) []Token) {
 	var operator rune
 	operator = runes[start]
 	switch operator {
+	case '-':
 	case '+':
 	case '*':
 	case '/':
 	case '^':
 	case '=':
-	case []rune("≤")[0]:
 	case '<':
 	case '>':
+	case []rune("≤")[0]:
 	case []rune("≥")[0]:
+	case []rune("∏")[0]:
+	case []rune("∑")[0]:
+	case []rune("∫")[0]:
+	case []rune("√")[0]:
+	case []rune("≈")[0]:
+	case []rune("⁄")[0]:
+	case []rune("∓")[0]:
+	case []rune("±")[0]:
+	case []rune("≡")[0]:
+	case []rune("≢")[0]:
+	case []rune("≠")[0]:
+	case []rune("•")[0]:
 		break
 	default:
 		return -1, func(action int) []Token {

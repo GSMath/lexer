@@ -71,9 +71,15 @@ func TestSubexpressionToken(t *testing.T) {
 }
 
 func TestTokenizeString(t *testing.T) {
-	to_tokenize := "3b≥3iœ4^œ5+(1+2i)"
+	to_tokenize := "-1e-34i⁄kappa (3 + (-1e-34i+4))"
 	generators := TokenizeString(to_tokenize)
-	if len(generators) != 9 {
-		t.Error("Expected 9, got ", len(generators))
+	if len(generators) != 4 {
+		t.Error("Expected 4, got ", len(generators))
+	}
+	if generators[0](GetToken)[0]._type != ImagNumeric ||
+		generators[1](GetToken)[0]._type != Operator ||
+		generators[2](GetToken)[0]._type != Symbol ||
+		generators[3](GetToken)[0]._type != Subexpression {
+		t.Error("Expected {ImaginaryNumber, Operator, Symbol, Subexpression}")
 	}
 }

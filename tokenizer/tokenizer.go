@@ -6,11 +6,14 @@ import (
 )
 
 const (
-	Operator      = iota
+	Wildcard      = iota
+	Numeric       = iota
+	Expression    = iota
 	Symbol        = iota
 	RealNumeric   = iota
 	ImagNumeric   = iota
 	Subexpression = iota
+	Operator      = iota
 	Empty         = -1
 )
 
@@ -19,56 +22,129 @@ const (
 	GetSubtokens = iota
 )
 
+const SupportedOperators = "-+*/^=≠<>≤≥∏∑∫√≈⁄÷∓±≡≢•∂"
+
 type Token struct {
-	_type         int
+	TokenType     int
 	Symbolic      string
 	Numeric       float64
 	Operator      rune
 	Subexpression string
 }
 
+func (lhs Token) Equivalent(rhs Token) bool {
+	if lhs.TokenType == Wildcard ||
+		rhs.TokenType == Wildcard {
+		return true
+	}
+	if lhs.TokenType == Numeric {
+		switch rhs.TokenType {
+		case RealNumeric:
+			return true
+		case ImagNumeric:
+			return true
+		}
+	}
+	if rhs.TokenType == Numeric {
+		switch lhs.TokenType {
+		case RealNumeric:
+			return true
+		case ImagNumeric:
+			return true
+		}
+	}
+	if lhs.TokenType == Expression &&
+		rhs.TokenType != Operator {
+		return true
+	}
+	if rhs.TokenType == Expression &&
+		lhs.TokenType != Operator {
+		return true
+	}
+	if lhs.TokenType != rhs.TokenType {
+		return false
+	}
+	if lhs.TokenType != Operator {
+		return true
+	}
+	if lhs.Operator == rhs.Operator {
+		return true
+	}
+	return false
+}
+
 func OperatorToken(runes []rune, start int) (int, func(int) []Token) {
+	var allOperators []rune
 	var operator rune
 	operator = runes[start]
+	allOperators = []rune(SupportedOperators)
+	count := 1
+	isOperator := false
 	switch operator {
-	case '-':
-	case '+':
-	case '*':
-	case '/':
-	case '^':
-	case '=':
-	case '<':
 	case '>':
-	case []rune("≤")[0]:
-	case []rune("≥")[0]:
-	case []rune("∏")[0]:
-	case []rune("∑")[0]:
-	case []rune("∫")[0]:
-	case []rune("√")[0]:
-	case []rune("≈")[0]:
-	case []rune("⁄")[0]:
-	case []rune("∓")[0]:
-	case []rune("±")[0]:
-	case []rune("≡")[0]:
-	case []rune("≢")[0]:
-	case []rune("≠")[0]:
-	case []rune("•")[0]:
-	case []rune("∂")[0]:
-		break
-	default:
-		return -1, func(action int) []Token {
+		if runes[start+1] == '=' {
+			operator = []rune("≥")[0]
+			count++
+		}
+	case '<':
+		if runes[start+1] == '=' {
+			operator = []rune("≤")[0]
+			count++
+		}
+	case '!':
+		if runes[start+1] == '=' {
+			operator = []rune("≠")[0]
+			count++
+		}
+	case '-':
+		if runes[start+1] == '+' {
+			operator = []rune("∓")[0]
+			count++
+		}
+	case '+':
+		if runes[start+1] == '-' {
+			operator = []rune("±")[0]
+			count++
+		}
+	case '=':
+		if runes[start+1] == '=' {
+			operator = []rune("≡")[0]
+			count++
+		}
+		if runes[start+1] == '!' &&
+			runes[start+1] == '=' {
+			operator = []rune("≢")[0]
+			count += 2
+		}
+	case '*':
+		operator = []rune("•")[0]
+	case []rune("÷")[0]:
+		operator = []rune("⁄")[0]
+	case '/':
+		operator = []rune("⁄")[0]
+
+	}
+	for i, valid := range allOperators {
+		if valid == operator {
+			isOperator = true
+			i++
+			break
+		}
+	}
+	if isOperator != true {
+		return 0, func(action int) []Token {
 			var t Token
-			t._type = Empty
+			t.TokenType = Empty
 			return []Token{t}
 		}
 	}
-	return 1, func(action int) []Token {
+	return count, func(action int) []Token {
 		var t Token
 		if action == GetToken {
-			t._type = Operator
+			t.TokenType = Operator
 			t.Operator = operator
 		} else {
-			t._type = Empty
+			t.TokenType = Empty
 		}
 		return []Token{t}
 	}
@@ -80,7 +156,7 @@ func SymbolicToken(runes []rune, start int) (int, func(int) []Token) {
 	if unicode.IsLetter((runes[i])) == false {
 		return 0, func(action int) []Token {
 			var t Token
-			t._type = Empty
+			t.TokenType = Empty
 			return []Token{t}
 		}
 	}
@@ -100,10 +176,10 @@ func SymbolicToken(runes []rune, start int) (int, func(int) []Token) {
 	return i, func(action int) []Token {
 		var t Token
 		if action == GetToken {
-			t._type = Symbol
+			t.TokenType = Symbol
 			t.Symbolic = symbol
 		} else {
-			t._type = Empty
+			t.TokenType = Empty
 		}
 		return []Token{t}
 	}
@@ -119,7 +195,7 @@ func NumericToken(runes []rune, start int) (int, func(int) []Token) {
 		runes[i] != '-' {
 		return 0, func(action int) []Token {
 			var t Token
-			t._type = Empty
+			t.TokenType = Empty
 			return []Token{t}
 		}
 	}
@@ -150,10 +226,10 @@ func NumericToken(runes []rune, start int) (int, func(int) []Token) {
 		return i, func(action int) []Token {
 			var t Token
 			if action == GetToken {
-				t._type = RealNumeric
+				t.TokenType = RealNumeric
 				t.Numeric = numeric
 			} else {
-				t._type = Empty
+				t.TokenType = Empty
 			}
 			return []Token{t}
 		}
@@ -161,10 +237,10 @@ func NumericToken(runes []rune, start int) (int, func(int) []Token) {
 		return i + 1, func(action int) []Token {
 			var t Token
 			if action == GetToken {
-				t._type = ImagNumeric
+				t.TokenType = ImagNumeric
 				t.Numeric = numeric
 			} else {
-				t._type = Empty
+				t.TokenType = Empty
 			}
 			return []Token{t}
 		}
@@ -180,7 +256,7 @@ func SubexpressionToken(runes []rune, start int) (int, func(int) []Token) {
 	if runes[i] != '(' && runes[i] != '[' {
 		return 0, func(action int) []Token {
 			var t Token
-			t._type = Empty
+			t.TokenType = Empty
 			return []Token{t}
 		}
 	}
@@ -203,17 +279,17 @@ func SubexpressionToken(runes []rune, start int) (int, func(int) []Token) {
 			for j := 0; j < len(generators); j++ {
 				k := generators[j](GetToken)
 				T = append(T, k[0])
-				if T[0]._type == Empty {
+				if T[0].TokenType == Empty {
 					return 0, func(action int) []Token {
 						var t Token
-						t._type = Empty
+						t.TokenType = Empty
 						return []Token{t}
 					}
 				}
 			}
 			return i, func(action int) []Token {
 				if action == GetToken {
-					t._type = Subexpression
+					t.TokenType = Subexpression
 					t.Subexpression = string(runes[1 : i-1])
 					return []Token{t}
 				} else {
@@ -227,7 +303,7 @@ func SubexpressionToken(runes []rune, start int) (int, func(int) []Token) {
 	}
 	return 0, func(action int) []Token {
 		var t Token
-		t._type = Empty
+		t.TokenType = Empty
 		return []Token{t}
 	}
 }
